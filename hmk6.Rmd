@@ -107,22 +107,77 @@ models_results_df %>%
 
 ## Problem 2
 
-Find some residuals
+load data
 
 ```{r}
 baby_df = 
-  read_csv("birthweight.csv")
+  read_csv("birthweight.csv") 
 ```
 
-fit a model
+clean the data for regression 
+
+There is no missing data
 
 ```{r}
-model_fit = lm(bwt ~ gaweeks, data = baby_df)
+baby_df = 
+ baby_df %>% 
+ mutate(
+  babysex = factor(case_when(
+   babysex == 1 ~ "male",
+   babysex == 2 ~ "female"
+   )),
+  frace = factor(case_when(
+   frace == 1 ~ "white",
+   frace == 2 ~ "black",
+   frace == 3 ~ "asion",
+   frace == 4 ~ "puerto",
+   frace == 8 ~ "other",
+   frace == 9 ~ "unknown")),
+  malform = factor(case_when(
+   malform == 0 ~ "absent",
+   malform == 1 ~ "present"
+  )),
+  mrace = factor(case_when(
+   mrace == 1 ~ "white",
+   mrace == 2 ~ "black",
+   mrace == 3 ~ "asion",
+   mrace == 4 ~ "puerto",
+   mrace == 8 ~ "other")),
+  
+  bwt = bwt *0.00220462262185
+ ) 
+ 
+
+sum(is.na(baby_df))
 ```
 
+
+take a look at variables and finally choose 7 parameters with p-value < 0.05. They are babysex, bhead, blength, delwt, gaweeks, parity, smoken. 
+
 ```{r}
+
 baby_df %>% 
-  modelr::add_residuals(model_fit) %>% 
-  ggplot(aes(x = gaweeks, y = resid)) + 
+ lm(bwt ~ ., data = .) %>% 
+ broom::tidy() %>% 
+ filter (p.value < 0.05 ) %>% 
+ knitr::kable()
+  
+```
+
+change the benchmark and look at the model with filtered parameter 
+
+```{r}
+model = baby_df %>% 
+ mutate(babysex = fct_infreq(babysex)) %>% 
+ lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = .) %>% 
+ broom::tidy() %>% 
+ select(term, estimate, p.value)
+```
+
+```{r eval=FALSE, include=FALSE}
+baby_df %>%
+  modelr::add_residuals(model) %>% 
+  modelr::add_prediction(model) %>% 
+  ggplot(aes(x = pred, y = resid)) + 
   geom_point()
 ```
