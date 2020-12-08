@@ -206,6 +206,22 @@ my_model %>%
     ## 7 parity        0.226   1.42e-  2
     ## 8 smoken       -0.00478 1.96e-  4
 
+``` r
+baby_df %>%
+  modelr::add_residuals(my_model) %>% 
+  modelr::add_predictions(my_model)%>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", color = "red", linetype = 2) +
+  labs(title = "plot of Predictions and Residuals(pounds)", 
+       x = "Predictions ", 
+       y = "Residuals")
+```
+
+    ## `geom_smooth()` using formula 'y ~ x'
+
+<img src="hmk6_files/figure-gfm/unnamed-chunk-9-1.png" width="90%" />
+
 From the plot, we can see that all points are gathered together. There
 is no significant relationship between them.
 
@@ -287,3 +303,90 @@ We could find out that my\_model has lowest rmse, which means that it
 could be the best model among these three models, and the model using
 length at birth and gestational age as prediction has the highest rmse
 and performs worst.
+
+## Problem 3
+
+### load data
+
+``` r
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+    ## Registered S3 method overwritten by 'hoardr':
+    ##   method           from
+    ##   print.cache_info httr
+
+    ## using cached file: /Users/wxy/Library/Caches/R/noaa_ghcnd/USW00094728.dly
+
+    ## date created (size, mb): 2020-10-05 16:54:17 (7.522)
+
+    ## file min/max dates: 1869-01-01 / 2020-10-31
+
+``` r
+boot_straps = 
+  weather_df %>% 
+  modelr::bootstrap(n = 5000) %>% 
+  mutate(
+    models = map(strap, ~lm(tmax ~ tmin, data = .x) ),
+    results = map(models, broom::tidy),
+    glance = map(models, broom::glance)) %>%
+  unnest(results, glance) %>% 
+  select(.id, term, estimate, r.squared)
+```
+
+### calculate log\_beta and r.square
+
+``` r
+boot_straps = 
+ boot_straps %>% 
+ pivot_wider(
+    names_from = term,
+    values_from = estimate) %>% 
+  rename(
+    beta_0 = `(Intercept)`,
+    beta_1 = tmin) %>% 
+  mutate(log_beta = log(beta_0*beta_1)) %>% 
+  select(r.squared, log_beta)
+```
+
+### Plot distribution of my estimate
+
+``` r
+boot_straps %>% 
+ ggplot(aes(x = log_beta)) +
+ geom_density() +
+ labs(
+  title = "Distribution of log beta",
+  x = "log beta",
+  y= "Density"
+ )
+```
+
+<img src="hmk6_files/figure-gfm/unnamed-chunk-16-1.png" width="90%" />
+
+``` r
+boot_straps %>% 
+ ggplot(aes(x = r.squared)) +
+ geom_density() +
+ labs(
+  title = "Distribution of r square",
+  x = "r square",
+  y= "Density"
+ )
+```
+
+<img src="hmk6_files/figure-gfm/unnamed-chunk-16-2.png" width="90%" />
+
+We could find that both log\_beta and r square are nearly normal
+distribution. And r square is quite large, which indicates that tim and
+tmax are relative to some extent.
