@@ -390,3 +390,19 @@ boot_straps %>%
 We could find that both log\_beta and r square are nearly normal
 distribution. And r square is quite large, which indicates that tim and
 tmax are relative to some extent.
+
+### confidence intercal for r square and log beta
+
+``` r
+boot_straps %>% 
+  summarize(
+    estimate = c("r square", "log beta"),
+    ci_lower = c(quantile(r.squared, 0.025), quantile(log_beta, 0.025)),
+    ci_upper = c(quantile(r.squared, 0.975), quantile(log_beta, 0.975))) %>% 
+  knitr::kable()
+```
+
+| estimate | ci\_lower | ci\_upper |
+| :------- | --------: | --------: |
+| r square | 0.8944297 | 0.9277775 |
+| log beta | 1.9642117 | 2.0599286 |
