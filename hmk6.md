@@ -105,7 +105,7 @@ models_results_df %>%
 
 ## Problem 2
 
-load data
+\#\#\#load data
 
 ``` r
 baby_df = 
@@ -119,9 +119,9 @@ baby_df =
 
     ## See spec(...) for full column specifications.
 
-clean the data for regression
+### clean the data for regression
 
-There is no missing data
+There is no missing data.
 
 ``` r
 baby_df = 
@@ -149,6 +149,7 @@ baby_df =
    mrace == 4 ~ "puerto",
    mrace == 8 ~ "other")),
   
+# turn grams into pounds
   bwt = bwt *0.00220462262185
  ) 
  
@@ -158,8 +159,10 @@ sum(is.na(baby_df))
 
     ## [1] 0
 
-take a look at variables and finally choose 7 parameters with p-value \<
-0.05. They are babysex, bhead, blength, delwt, gaweeks, parity, smoken.
+### take a look at variables
+
+Finally choose 7 parameters with p-value \< 0.05. They are babysex,
+bhead, blength, delwt, gaweeks, parity, smoken.
 
 ``` r
 baby_df %>% 
@@ -180,12 +183,107 @@ baby_df %>%
 | parity      |    0.2106321 | 0.0892415 |   2.360248 | 0.0183069 |
 | smoken      |  \-0.0107020 | 0.0012942 | \-8.269011 | 0.0000000 |
 
-change the benchmark and look at the model with filtered parameter
+### look at the model with filtered parameter
 
 ``` r
-model = baby_df %>% 
- mutate(babysex = fct_infreq(babysex)) %>% 
- lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = .) %>% 
+my_model = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = baby_df) 
+
+
+my_model %>% 
  broom::tidy() %>% 
  select(term, estimate, p.value)
 ```
+
+    ## # A tibble: 8 x 3
+    ##   term         estimate   p.value
+    ##   <chr>           <dbl>     <dbl>
+    ## 1 (Intercept) -13.8     0.       
+    ## 2 babysexmale  -0.0656  6.60e-  4
+    ## 3 bhead         0.302   1.33e-282
+    ## 4 blength       0.174   5.20e-274
+    ## 5 delwt         0.00457 4.37e- 25
+    ## 6 gaweeks       0.0317  1.84e- 21
+    ## 7 parity        0.226   1.42e-  2
+    ## 8 smoken       -0.00478 1.96e-  4
+
+From the plot, we can see that all points are gathered together. There
+is no significant relationship between them.
+
+### Compare models to two others
+
+``` r
+model_1 = lm(bwt ~ blength + gaweeks, data = baby_df)
+model_1 %>% 
+ broom::tidy() %>% 
+ select(term, estimate, p.value)
+```
+
+    ## # A tibble: 3 x 3
+    ##   term        estimate  p.value
+    ##   <chr>          <dbl>    <dbl>
+    ## 1 (Intercept)  -9.58   0.      
+    ## 2 blength       0.283  0.      
+    ## 3 gaweeks       0.0596 2.36e-54
+
+``` r
+model_2 = lm(bwt ~ bhead * blength * babysex, data = baby_df)
+model_2 %>% 
+ broom::tidy() %>% 
+ select(term, estimate, p.value)
+```
+
+    ## # A tibble: 8 x 3
+    ##   term                       estimate    p.value
+    ##   <chr>                         <dbl>      <dbl>
+    ## 1 (Intercept)                -1.77    0.467     
+    ## 2 bhead                      -0.0366  0.626     
+    ## 3 blength                    -0.0477  0.354     
+    ## 4 babysexmale               -14.1     0.000147  
+    ## 5 bhead:blength               0.00733 0.00000317
+    ## 6 bhead:babysexmale           0.437   0.000105  
+    ## 7 blength:babysexmale         0.273   0.000429  
+    ## 8 bhead:blength:babysexmale  -0.00855 0.000245
+
+### compare with cross validation
+
+``` r
+cv_df =
+  crossv_mc(baby_df, 200) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+
+cv_df = 
+  cv_df %>% 
+  mutate(
+    my_model  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = baby_df)),
+    model_1  = map(train, ~lm(bwt ~ blength + gaweeks, data = baby_df)),
+    model_2  = map(train, ~lm(bwt ~ bhead * blength * babysex, data = baby_df))) %>% 
+  mutate(
+    rmse_my = map2_dbl(my_model, test, ~rmse(model = .x, data = .y)),
+    rmse_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+    rmse_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)))
+```
+
+### make a plot to see the comparison
+
+``` r
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() +
+  labs( 
+   title = "Compare three models with cross validtion")
+```
+
+<img src="hmk6_files/figure-gfm/unnamed-chunk-12-1.png" width="90%" />
+
+We could find out that my\_model has lowest rmse, which means that it
+could be the best model among these three models, and the model using
+length at birth and gestational age as prediction has the highest rmse
+and performs worst.

@@ -107,16 +107,16 @@ models_results_df %>%
 
 ## Problem 2
 
-load data
+###load data
 
 ```{r}
 baby_df = 
   read_csv("birthweight.csv") 
 ```
 
-clean the data for regression 
+### clean the data for regression 
 
-There is no missing data
+There is no missing data.
 
 ```{r}
 baby_df = 
@@ -144,6 +144,7 @@ baby_df =
    mrace == 4 ~ "puerto",
    mrace == 8 ~ "other")),
   
+# turn grams into pounds
   bwt = bwt *0.00220462262185
  ) 
  
@@ -152,7 +153,9 @@ sum(is.na(baby_df))
 ```
 
 
-take a look at variables and finally choose 7 parameters with p-value < 0.05. They are babysex, bhead, blength, delwt, gaweeks, parity, smoken. 
+### take a look at variables
+
+Finally choose 7 parameters with p-value < 0.05. They are babysex, bhead, blength, delwt, gaweeks, parity, smoken. 
 
 ```{r}
 
@@ -164,20 +167,82 @@ baby_df %>%
   
 ```
 
-change the benchmark and look at the model with filtered parameter 
+### look at the model with filtered parameter 
 
 ```{r}
-model = baby_df %>% 
- mutate(babysex = fct_infreq(babysex)) %>% 
- lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = .) %>% 
+my_model = lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = baby_df) 
+
+
+my_model %>% 
  broom::tidy() %>% 
  select(term, estimate, p.value)
 ```
 
 ```{r eval=FALSE, include=FALSE}
 baby_df %>%
-  modelr::add_residuals(model) %>% 
-  modelr::add_prediction(model) %>% 
-  ggplot(aes(x = pred, y = resid)) + 
-  geom_point()
+  modelr::add_residuals(my_model) %>% 
+  modelr::add_predictions(my_model)%>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", color = "red", linetype = 2) +
+  labs(title = "plot of Predictions and Residuals(pounds)", 
+       x = "Predictions ", 
+       y = "Residuals")
+
 ```
+
+From the plot, we can see that all points are gathered together. There is no significant relationship between them.
+
+### Compare models to two others
+
+
+```{r}
+model_1 = lm(bwt ~ blength + gaweeks, data = baby_df)
+model_1 %>% 
+ broom::tidy() %>% 
+ select(term, estimate, p.value)
+
+model_2 = lm(bwt ~ bhead * blength * babysex, data = baby_df)
+model_2 %>% 
+ broom::tidy() %>% 
+ select(term, estimate, p.value)
+```
+
+### compare with cross validation
+
+```{r}
+cv_df =
+  crossv_mc(baby_df, 200) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble))
+
+cv_df = 
+  cv_df %>% 
+  mutate(
+    my_model  = map(train, ~lm(bwt ~ babysex + bhead + blength + delwt + gaweeks + parity + smoken, data = baby_df)),
+    model_1  = map(train, ~lm(bwt ~ blength + gaweeks, data = baby_df)),
+    model_2  = map(train, ~lm(bwt ~ bhead * blength * babysex, data = baby_df))) %>% 
+  mutate(
+    rmse_my = map2_dbl(my_model, test, ~rmse(model = .x, data = .y)),
+    rmse_1 = map2_dbl(model_1, test, ~rmse(model = .x, data = .y)),
+    rmse_2 = map2_dbl(model_2, test, ~rmse(model = .x, data = .y)))
+```
+
+### make a plot to see the comparison
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") %>% 
+  mutate(model = fct_inorder(model)) %>% 
+  ggplot(aes(x = model, y = rmse)) + geom_violin() +
+  labs( 
+   title = "Compare three models with cross validtion")
+```
+
+We could find out that my_model has lowest rmse, which means that it could be the best model among these three models, and the model using length at birth and gestational age as prediction has the highest rmse and performs worst. 
